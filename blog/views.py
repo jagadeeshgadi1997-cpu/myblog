@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Post, Author, Category
-from .serializers import PostSerializer, AuthorSerializer, CategorySerializer
+from .serializers import PostWriteSerializer, AuthorSerializer, CategorySerializer
 from django.contrib.auth.models import User
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import api_view, permission_classes
@@ -12,17 +12,17 @@ from rest_framework.decorators import api_view, permission_classes
 def post_list(request):
     if request.method == "GET":
         posts      = Post.objects.filter(is_published=True).order_by("-created_at")
-        serializer = PostSerializer(posts, many=True)
+        serializer = PostWriteSerializer(posts, many=True)
         return Response(serializer.data)
 
     elif request.method == "POST":
-        # Only logged in users can create posts
-        if not request.user.is_authenticated:
+        # Only staff/admin can create posts
+        if not request.user.is_authenticated or not request.user.is_staff:
             return Response(
-                {"error": "Login required"},
-                status=status.HTTP_401_UNAUTHORIZED
+                {"error": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN
             )
-        serializer = PostSerializer(data=request.data)
+        serializer = PostWriteSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -36,7 +36,7 @@ def post_detail(request, post_id):
         return Response({"error": "Post not found"}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == "GET":
-        serializer = PostSerializer(post)
+        serializer = PostWriteSerializer(post)
         return Response(serializer.data)
 
     elif request.method == "DELETE":
@@ -77,7 +77,7 @@ def posts_by_category(request, category_slug):
         return Response({"error": "Category not found"}, status=status.HTTP_404_NOT_FOUND)
 
     posts      = Post.objects.filter(category=category, is_published=True).order_by("-created_at")
-    serializer = PostSerializer(posts, many=True)
+    serializer = PostWriteSerializer(posts, many=True)
     return Response(serializer.data)
    
 
@@ -139,3 +139,5 @@ def make_admin(request):
         return Response({"success": f"{user.username} is now a superuser"})
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
+    
+    
