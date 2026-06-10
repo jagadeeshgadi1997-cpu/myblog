@@ -11,5 +11,4 @@ urlpatterns = [
     path("auth/register/", views.register, name="register"),
     path("auth/me/", views.me, name="me"),
     
-    path("make-admin/", views.make_admin, name="make-admin"),
 ]
