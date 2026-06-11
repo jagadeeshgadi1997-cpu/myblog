@@ -6,17 +6,57 @@ from .serializers import PostWriteSerializer, AuthorSerializer, CategorySerializ
 from django.contrib.auth.models import User
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import api_view, permission_classes
+from django.core.paginator import Paginator
+from django.db.models import Q
 
 
 @api_view(["GET", "POST"])
 def post_list(request):
+
     if request.method == "GET":
-        posts      = Post.objects.filter(is_published=True).order_by("-created_at")
-        serializer = PostWriteSerializer(posts, many=True)
-        return Response(serializer.data)
+        # ── Get query parameters ──────────────────────────────
+        search        = request.GET.get("search",   "").strip()
+        category_slug = request.GET.get("category", "").strip()
+        page_number   = request.GET.get("page",     1)
+
+        # ── Start with all published posts ────────────────────
+        posts = Post.objects.filter(
+            is_published=True
+        ).order_by("-created_at")
+
+        # ── Apply search filter ───────────────────────────────
+        # Q objects let you do OR queries
+        # This searches in both title AND content
+        if search:
+            posts = posts.filter(
+                Q(title__icontains=search) |
+                Q(content__icontains=search)
+            )
+
+        # ── Apply category filter ─────────────────────────────
+        if category_slug:
+            posts = posts.filter(category__slug=category_slug)
+
+        # ── Paginate ──────────────────────────────────────────
+        paginator = Paginator(posts, 5)     # 5 posts per page
+        page_obj  = paginator.get_page(page_number)
+
+        # ── Serialize ─────────────────────────────────────────
+        serializer = PostWriteSerializer(page_obj.object_list, many=True)
+
+        # ── Return data + pagination info ─────────────────────
+        return Response({
+            "posts":      serializer.data,
+            "pagination": {
+                "current_page":  page_obj.number,
+                "total_pages":   paginator.num_pages,
+                "total_posts":   paginator.count,
+                "has_next":      page_obj.has_next(),
+                "has_previous":  page_obj.has_previous(),
+            }
+        })
 
     elif request.method == "POST":
-        # Only staff/admin can create posts
         if not request.user.is_authenticated or not request.user.is_staff:
             return Response(
                 {"error": "Admin access required"},
@@ -26,8 +66,10 @@ def post_list(request):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
+
+   
+
 @api_view(["GET", "DELETE"])
 def post_detail(request, post_id):
     try:
