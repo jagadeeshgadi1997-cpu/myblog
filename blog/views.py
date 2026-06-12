@@ -69,27 +69,46 @@ def post_list(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
 
    
-
-@api_view(["GET", "DELETE"])
+@api_view(["GET", "PATCH", "DELETE"])
 def post_detail(request, post_id):
+
+    # Get the post or return 404
     try:
         post = Post.objects.get(id=post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Post not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
+    # ── GET — return post data ────────────────────────────────
     if request.method == "GET":
         serializer = PostWriteSerializer(post)
         return Response(serializer.data)
 
+    # ── PATCH — update post (admin only) ──────────────────────
+    elif request.method == "PATCH":
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return Response(
+                {"error": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = PostWriteSerializer(post, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # ── DELETE — delete post (admin only) ─────────────────────
     elif request.method == "DELETE":
-        if not request.user.is_staff:
+        if not request.user.is_authenticated or not request.user.is_staff:
             return Response(
                 {"error": "Admin access required"},
                 status=status.HTTP_403_FORBIDDEN
             )
         post.delete()
         return Response(
-            {"message": "Post deleted"},
+            {"message": "Post deleted successfully"},
             status=status.HTTP_204_NO_CONTENT
         )
 
